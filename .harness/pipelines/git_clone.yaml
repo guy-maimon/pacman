@@ -1,5 +1,5 @@
 pipeline:
-  name: Git Clone Pipeline
+  name: Build and Push Pacman
   identifier: git_clone
   projectIdentifier: guym_tf_project_1
   orgIdentifier: default
@@ -15,8 +15,8 @@ pipeline:
             branch: master
   stages:
     - stage:
-        name: Clone and Run
-        identifier: CloneAndRun
+        name: Build and Push
+        identifier: BuildAndPush
         type: CI
         spec:
           cloneCodebase: true
@@ -34,14 +34,14 @@ pipeline:
           execution:
             steps:
               - step:
-                  type: Run
-                  name: List Repository
-                  identifier: List_Repository
+                  type: BuildAndPushDockerRegistry
+                  name: Build and Push
+                  identifier: Build_and_Push
                   spec:
                     connectorRef: account.docker_registry
-                    image: alpine:3
-                    shell: Bash
-                    command: |-
-                      echo "Cloned pacman @ master"
-                      ls -la
-                      if [ -f README.md ]; then head -20 README.md; fi
+                    repo: guyma6/pacman
+                    tags:
+                      - <+pipeline.sequenceId>
+                      - latest
+                    dockerfile: docker/Dockerfile
+                    context: .
