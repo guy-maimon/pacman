@@ -20,6 +20,8 @@ pipeline:
         type: CI
         spec:
           cloneCodebase: true
+          sharedPaths:
+            - /shared/scan_results
           platform:
             os: Linux
             arch: Amd64
@@ -34,26 +36,27 @@ pipeline:
           execution:
             steps:
               - step:
-                  type: Run
+                  type: Snyk
                   name: Snyk Open Source
                   identifier: Snyk_Open_Source
                   spec:
-                    connectorRef: account.docker_registry
-                    image: snyk/snyk-cli:docker
-                    shell: Bash
-                    command: |-
-                      set -euo pipefail
-                      if [ -z "${SNYK_TOKEN:-}" ]; then
-                        echo "ERROR: SNYK_TOKEN is empty. Set project secret snyk_api_token in Harness."
-                        exit 1
-                      fi
-                      export SNYK_TOKEN
-                      snyk test --all-projects --severity-threshold=high
-                    envVariables:
-                      SNYK_TOKEN: <+secrets.getValue("snyk_api_token")>
+                    mode: orchestration
+                    config: oss
+                    target:
+                      type: repository
+                      name: pacman
+                      variant: master
+                    auth:
+                      access_token: <+secrets.getValue("snyk_api_token")>
+                    advanced:
+                      fail_on_severity: high
+                      log:
+                        level: info
+                    settings:
+                      tool_args: "--all-projects --severity-threshold=high"
                     resources:
                       limits:
-                        memory: 1Gi
+                        memory: 1536Mi
                         cpu: 1000m
               - step:
                   type: BuildAndPushDockerRegistry
@@ -68,26 +71,32 @@ pipeline:
                     dockerfile: docker/Dockerfile
                     context: .
               - step:
-                  type: Run
+                  type: Snyk
                   name: Snyk Container
                   identifier: Snyk_Container
                   spec:
-                    connectorRef: account.docker_registry
-                    image: snyk/snyk-cli:docker
-                    shell: Bash
-                    command: |-
-                      set -euo pipefail
-                      if [ -z "${SNYK_TOKEN:-}" ]; then
-                        echo "ERROR: SNYK_TOKEN is empty. Set project secret snyk_api_token in Harness."
-                        exit 1
-                      fi
-                      export SNYK_TOKEN
-                      snyk container test guyma6/pacman:latest --file=docker/Dockerfile
-                    envVariables:
-                      SNYK_TOKEN: <+secrets.getValue("snyk_api_token")>
+                    mode: orchestration
+                    config: container
+                    target:
+                      type: container
+                      name: guyma6/pacman
+                      variant: latest
+                    image:
+                      type: docker_v2
+                      domain: docker.io
+                      name: guyma6/pacman
+                      tag: latest
+                    auth:
+                      access_token: <+secrets.getValue("snyk_api_token")>
+                    advanced:
+                      fail_on_severity: high
+                      log:
+                        level: info
+                    settings:
+                      tool_args: "--file=docker/Dockerfile"
                     resources:
                       limits:
-                        memory: 1Gi
+                        memory: 1536Mi
                         cpu: 1000m
                   when:
                     stageStatus: Success
@@ -105,10 +114,13 @@ pipeline:
                 spec:
                   artifacts:
                     primary:
+                      primaryArtifactRef: pacman_image
                       sources:
                         - identifier: pacman_image
                           type: DockerRegistry
                           spec:
+                            connectorRef: account.docker_registry
+                            imagePath: guyma6/pacman
                             tag: <+pipeline.sequenceId>
           environment:
             environmentRef: pacman
