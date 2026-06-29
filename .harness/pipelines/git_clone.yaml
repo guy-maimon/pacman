@@ -23,9 +23,14 @@ pipeline:
           platform:
             os: Linux
             arch: Amd64
-          runtime:
-            type: Cloud
-            spec: {}
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: kubernetes
+              namespace: harness-delegate-ng-project
+              automountServiceAccountToken: true
+              nodeSelector: {}
+              os: Linux
           execution:
             steps:
               - step:
@@ -33,6 +38,8 @@ pipeline:
                   name: List Repository
                   identifier: List_Repository
                   spec:
+                    connectorRef: account.docker_registry
+                    image: alpine:3
                     shell: Bash
                     command: |-
                       echo "Cloned pacman @ master"
