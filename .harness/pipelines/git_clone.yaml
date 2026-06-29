@@ -94,42 +94,61 @@ pipeline:
     - stage:
         name: Deploy to Kubernetes
         identifier: DeployToKubernetes
-        type: CI
+        type: Deployment
         spec:
-          cloneCodebase: false
-          platform:
-            os: Linux
-            arch: Amd64
-          infrastructure:
-            type: KubernetesDirect
-            spec:
-              connectorRef: kubernetes
-              namespace: harness-delegate-ng-project
-              automountServiceAccountToken: true
-              nodeSelector: {}
-              os: Linux
+          deploymentType: Kubernetes
+          service:
+            serviceRef: pacman
+            serviceInputs:
+              serviceDefinition:
+                type: Kubernetes
+                spec:
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: pacman_image
+                      sources:
+                        - identifier: pacman_image
+                          type: DockerRegistry
+                          spec:
+                            connectorRef: account.docker_registry
+                            imagePath: guyma6/pacman
+                            tag: <+pipeline.sequenceId>
+          environment:
+            environmentRef: pacman
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: pacman_k8s
           execution:
             steps:
               - step:
-                  type: Run
-                  name: Deploy Pacman
-                  identifier: Deploy_Pacman
+                  type: K8sApply
+                  name: Apply Namespace
+                  identifier: Apply_Namespace
+                  timeout: 10m
                   spec:
-                    connectorRef: account.docker_registry
-                    image: bitnami/kubectl:1.32
-                    shell: Bash
-                    command: |-
-                      set -euo pipefail
-                      export KUBECONFIG="${HARNESS_KUBE_CONFIG_PATH}"
-                      IMAGE="guyma6/pacman:<+pipeline.sequenceId>"
-
-                      kubectl create namespace pacman --dry-run=client -o yaml | kubectl apply -f -
-                      kubectl create deployment pacman --image="${IMAGE}" --port=8080 -n pacman --dry-run=client -o yaml | kubectl apply -f -
-                      kubectl set image deployment/pacman pacman="${IMAGE}" -n pacman
-                      kubectl expose deployment pacman --name=pacman --port=8080 --target-port=8080 -n pacman --dry-run=client -o yaml | kubectl apply -f -
-                      kubectl rollout status deployment/pacman -n pacman --timeout=300s
-                      kubectl get all -n pacman
-                    resources:
-                      limits:
-                        memory: 512Mi
-                        cpu: 500m
+                    filePaths:
+                      - templates/namespace.yaml
+                    skipDryRun: false
+                    skipSteadyStateCheck: true
+              - step:
+                  type: K8sRollingDeploy
+                  name: Rollout Deployment
+                  identifier: rolloutDeployment
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+            rollbackSteps:
+              - step:
+                  type: K8sRollingRollback
+                  name: Rolling Rollback
+                  identifier: rollingRollback
+                  timeout: 10m
+                  spec:
+                    pruningEnabled: false
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
