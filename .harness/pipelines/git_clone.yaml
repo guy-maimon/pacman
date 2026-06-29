@@ -45,6 +45,7 @@ pipeline:
                     shell: Bash
                     command: |-
                       set -euo pipefail
+                      cd /harness
                       npm install --no-audit --no-fund
                     resources:
                       limits:
