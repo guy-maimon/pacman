@@ -41,11 +41,9 @@ pipeline:
                   identifier: Install_Dependencies
                   spec:
                     connectorRef: account.docker_registry
-                    image: node:20-alpine
-                    shell: Bash
+                    image: node:20
+                    shell: Sh
                     command: |-
-                      set -euo pipefail
-                      cd /harness
                       npm install --no-audit --no-fund
                     resources:
                       limits:
@@ -128,10 +126,13 @@ pipeline:
                 spec:
                   artifacts:
                     primary:
+                      primaryArtifactRef: pacman_image
                       sources:
                         - identifier: pacman_image
                           type: DockerRegistry
                           spec:
+                            connectorRef: account.docker_registry
+                            imagePath: guyma6/pacman
                             tag: <+pipeline.sequenceId>
           environment:
             environmentRef: pacman
