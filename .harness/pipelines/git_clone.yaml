@@ -34,6 +34,23 @@ pipeline:
           execution:
             steps:
               - step:
+                  type: Run
+                  name: Snyk Open Source
+                  identifier: Snyk_Open_Source
+                  spec:
+                    connectorRef: account.docker_registry
+                    image: snyk/snyk-cli:docker
+                    shell: Bash
+                    command: |-
+                      snyk auth "$SNYK_TOKEN"
+                      snyk test --all-projects --severity-threshold=high
+                    envVariables:
+                      SNYK_TOKEN: <+secrets.getValue("snyk_api_token")>
+                    resources:
+                      limits:
+                        memory: 1Gi
+                        cpu: 1000m
+              - step:
                   type: BuildAndPushDockerRegistry
                   name: Build and Push
                   identifier: Build_and_Push
@@ -45,3 +62,22 @@ pipeline:
                       - latest
                     dockerfile: docker/Dockerfile
                     context: .
+              - step:
+                  type: Run
+                  name: Snyk Container
+                  identifier: Snyk_Container
+                  spec:
+                    connectorRef: account.docker_registry
+                    image: snyk/snyk-cli:docker
+                    shell: Bash
+                    command: |-
+                      snyk auth "$SNYK_TOKEN"
+                      snyk container test guyma6/pacman:latest --file=docker/Dockerfile
+                    envVariables:
+                      SNYK_TOKEN: <+secrets.getValue("snyk_api_token")>
+                    resources:
+                      limits:
+                        memory: 1Gi
+                        cpu: 1000m
+                  when:
+                    stageStatus: Success
