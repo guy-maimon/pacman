@@ -52,8 +52,6 @@ pipeline:
                       fail_on_severity: high
                       log:
                         level: info
-                    settings:
-                      tool_args: "--all-projects --severity-threshold=high"
                     resources:
                       limits:
                         memory: 1536Mi
@@ -114,10 +112,13 @@ pipeline:
                 spec:
                   artifacts:
                     primary:
+                      primaryArtifactRef: pacman_image
                       sources:
                         - identifier: pacman_image
                           type: DockerRegistry
                           spec:
+                            connectorRef: account.docker_registry
+                            imagePath: guyma6/pacman
                             tag: <+pipeline.sequenceId>
           environment:
             environmentRef: pacman
