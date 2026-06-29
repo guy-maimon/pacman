@@ -42,6 +42,11 @@ pipeline:
                     image: snyk/snyk-cli:docker
                     shell: Bash
                     command: |-
+                      set -euo pipefail
+                      if [ -z "${SNYK_TOKEN:-}" ]; then
+                        echo "ERROR: SNYK_TOKEN is empty. Set project secret snyk_api_token in Harness."
+                        exit 1
+                      fi
                       snyk auth "$SNYK_TOKEN"
                       snyk test --all-projects --severity-threshold=high
                     envVariables:
@@ -71,6 +76,11 @@ pipeline:
                     image: snyk/snyk-cli:docker
                     shell: Bash
                     command: |-
+                      set -euo pipefail
+                      if [ -z "${SNYK_TOKEN:-}" ]; then
+                        echo "ERROR: SNYK_TOKEN is empty. Set project secret snyk_api_token in Harness."
+                        exit 1
+                      fi
                       snyk auth "$SNYK_TOKEN"
                       snyk container test guyma6/pacman:latest --file=docker/Dockerfile
                     envVariables:
