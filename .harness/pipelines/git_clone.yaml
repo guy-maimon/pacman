@@ -1,5 +1,5 @@
 pipeline:
-  name: Build and Push Pacman
+  name: Build Push and Deploy Pacman
   identifier: git_clone
   projectIdentifier: guym_tf_project_1
   orgIdentifier: default
@@ -81,3 +81,45 @@ pipeline:
                         cpu: 1000m
                   when:
                     stageStatus: Success
+    - stage:
+        name: Deploy to Kubernetes
+        identifier: DeployToKubernetes
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: kubernetes
+              namespace: harness-delegate-ng-project
+              automountServiceAccountToken: true
+              nodeSelector: {}
+              os: Linux
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Deploy Pacman
+                  identifier: Deploy_Pacman
+                  spec:
+                    connectorRef: account.docker_registry
+                    image: bitnami/kubectl:1.32
+                    shell: Bash
+                    command: |-
+                      set -euo pipefail
+                      export KUBECONFIG="${HARNESS_KUBE_CONFIG_PATH}"
+                      IMAGE="guyma6/pacman:<+pipeline.sequenceId>"
+
+                      kubectl create namespace pacman --dry-run=client -o yaml | kubectl apply -f -
+                      kubectl create deployment pacman --image="${IMAGE}" --port=8080 -n pacman --dry-run=client -o yaml | kubectl apply -f -
+                      kubectl set image deployment/pacman pacman="${IMAGE}" -n pacman
+                      kubectl expose deployment pacman --name=pacman --port=8080 --target-port=8080 -n pacman --dry-run=client -o yaml | kubectl apply -f -
+                      kubectl rollout status deployment/pacman -n pacman --timeout=300s
+                      kubectl get all -n pacman
+                    resources:
+                      limits:
+                        memory: 512Mi
+                        cpu: 500m
