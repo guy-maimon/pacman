@@ -128,13 +128,10 @@ pipeline:
                 spec:
                   artifacts:
                     primary:
-                      primaryArtifactRef: pacman_image
                       sources:
                         - identifier: pacman_image
                           type: DockerRegistry
                           spec:
-                            connectorRef: account.docker_registry
-                            imagePath: guyma6/pacman
                             tag: <+pipeline.sequenceId>
           environment:
             environmentRef: pacman
