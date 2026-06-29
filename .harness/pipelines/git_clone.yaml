@@ -47,7 +47,7 @@ pipeline:
                         echo "ERROR: SNYK_TOKEN is empty. Set project secret snyk_api_token in Harness."
                         exit 1
                       fi
-                      snyk auth "$SNYK_TOKEN"
+                      export SNYK_TOKEN
                       snyk test --all-projects --severity-threshold=high
                     envVariables:
                       SNYK_TOKEN: <+secrets.getValue("snyk_api_token")>
@@ -81,7 +81,7 @@ pipeline:
                         echo "ERROR: SNYK_TOKEN is empty. Set project secret snyk_api_token in Harness."
                         exit 1
                       fi
-                      snyk auth "$SNYK_TOKEN"
+                      export SNYK_TOKEN
                       snyk container test guyma6/pacman:latest --file=docker/Dockerfile
                     envVariables:
                       SNYK_TOKEN: <+secrets.getValue("snyk_api_token")>
