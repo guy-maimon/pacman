@@ -1,0 +1,201 @@
+pipeline:
+  name: Build Push and Deploy Pacman
+  identifier: git_clone
+  projectIdentifier: guym_tf_project_1
+  orgIdentifier: default
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        connectorRef: github
+        repoName: pacman
+        build:
+          type: branch
+          spec:
+            branch: master
+  stages:
+    - stage:
+        name: Build and Push
+        identifier: BuildAndPush
+        type: CI
+        spec:
+          cloneCodebase: true
+          sharedPaths:
+            - /shared/scan_results
+          platform:
+            os: Linux
+            arch: Amd64
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: kubernetes
+              namespace: harness-delegate-ng-project
+              automountServiceAccountToken: true
+              nodeSelector: {}
+              os: Linux
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Install Dependencies
+                  identifier: Install_Dependencies
+                  spec:
+                    connectorRef: account.docker_registry
+                    image: node:20
+                    shell: Sh
+                    command: |-
+                      npm install --no-audit --no-fund
+                    resources:
+                      limits:
+                        memory: 1Gi
+                        cpu: 1000m
+              - step:
+                  type: Snyk
+                  name: Snyk Open Source
+                  identifier: Snyk_Open_Source
+                  spec:
+                    mode: orchestration
+                    config: oss
+                    target:
+                      type: repository
+                      name: pacman
+                      variant: master
+                    auth:
+                      access_token: <+secrets.getValue("snyk_api_token")>
+                    advanced:
+                      fail_on_severity: none
+                      log:
+                        level: info
+                    resources:
+                      limits:
+                        memory: 1536Mi
+                        cpu: 1000m
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: Build and Push
+                  identifier: Build_and_Push
+                  spec:
+                    connectorRef: account.docker_registry
+                    repo: guyma6/pacman
+                    tags:
+                      - <+pipeline.sequenceId>
+                      - latest
+                    dockerfile: docker/Dockerfile
+                    context: .
+              - step:
+                  type: Snyk
+                  name: Snyk Container
+                  identifier: Snyk_Container
+                  timeout: 30m
+                  spec:
+                    mode: orchestration
+                    config: container
+                    target:
+                      type: container
+                      name: guyma6/pacman
+                      variant: latest
+                    image:
+                      type: docker_v2
+                      domain: docker.io
+                      name: guyma6/pacman
+                      tag: latest
+                    auth:
+                      access_token: <+secrets.getValue("snyk_api_token")>
+                    advanced:
+                      fail_on_severity: none
+                      log:
+                        level: info
+                    settings:
+                      tool_args: "--file=docker/Dockerfile"
+                    resources:
+                      limits:
+                        memory: 3072Mi
+                        cpu: 1000m
+                  when:
+                    stageStatus: Success
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: ManualIntervention
+                spec:
+                  timeout: 1d
+                  onTimeout:
+                    action:
+                      type: MarkAsSuccess
+    - stage:
+        name: Deploy to Kubernetes
+        identifier: DeployToKubernetes
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: pacman
+            serviceInputs:
+              serviceDefinition:
+                type: Kubernetes
+                spec:
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: pacman_image
+                      sources:
+                        - identifier: pacman_image
+                          type: DockerRegistry
+                          spec:
+                            connectorRef: account.docker_registry
+                            imagePath: guyma6/pacman
+                            tag: <+pipeline.sequenceId>
+          environment:
+            environmentRef: pacman
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: pacman_k8s
+          execution:
+            steps:
+              - step:
+                  type: HarnessApproval
+                  name: Approve Deploy
+                  identifier: Approve_Deploy
+                  timeout: 1d
+                  spec:
+                    approvalMessage: Security scans completed. Approve to deploy to Kubernetes.
+                    includePipelineExecutionHistory: true
+                    approvers:
+                      userGroups:
+                        - account._account_all_users
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+                    isAutoRejectEnabled: false
+              - step:
+                  type: K8sApply
+                  name: Apply Namespace
+                  identifier: Apply_Namespace
+                  timeout: 10m
+                  spec:
+                    filePaths:
+                      - /pacman/templates/namespace.yaml
+                    skipDryRun: false
+                    skipSteadyStateCheck: true
+              - step:
+                  type: K8sRollingDeploy
+                  name: Rollout Deployment
+                  identifier: rolloutDeployment
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+            rollbackSteps:
+              - step:
+                  type: K8sRollingRollback
+                  name: Rolling Rollback
+                  identifier: rollingRollback
+                  timeout: 10m
+                  spec:
+                    pruningEnabled: false
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
