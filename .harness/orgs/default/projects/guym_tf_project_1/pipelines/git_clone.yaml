@@ -109,8 +109,8 @@ pipeline:
                       tool_args: "--file=docker/Dockerfile"
                     resources:
                       limits:
-                        memory: 3072Mi
-                        cpu: 1000m
+                        memory: 4096Mi
+                        cpu: 1500m
                   when:
                     stageStatus: Success
         failureStrategies:
